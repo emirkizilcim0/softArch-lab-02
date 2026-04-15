@@ -1,63 +1,140 @@
-# SE 3006 — Software Architecture
+# SE3006 - Software Architecture
 
-## Lab 02: Modular Monolith Built with Pure Java
-
----
-
-# Objective
-
-The objective of this lab is to refactor a tightly coupled layered architecture into a **Modular Monolith** structure using pure Java.  
-The system is divided into vertical business modules:
-
-- **Catalog Module** — manages products and stock
-    
-- **Orders Module** — manages orders
-    
-
-The main goals were:
-
-- Apply **Information Hiding** using Java package-private access
-    
-- Enforce **module boundaries**
-    
-- Allow communication only via **public interfaces**
-    
-- Use **Factories** to wire dependencies
-    
-- Prevent direct access to internal module data
-    
+## Lab 02 – Modular Monolith vs Layered Architecture Comparison
 
 ---
 
-# Architecture Overview
+# Overview
 
-The system follows a **Modular Monolith** architecture. Each module encapsulates its own logic and internal classes.
+In **Lab 01**, a **Layered Architecture** was implemented using pure Java. Although layers were separated, the system still suffered from **tight coupling**, because the `OrderService` directly depended on `ProductRepository`.
+
+In **Lab 02**, the system was refactored into a **Modular Monolith** architecture. The application was divided into independent business modules:
+
+- `catalog` module (product & stock management)
+    
+- `orders` module (order management)
+    
+
+The main goal was to remove tight coupling and enforce **module boundaries** using **interfaces**, **factories**, and **information hiding**.
+
+---
+
+# Lab 01 – Tight Coupling (Layered Architecture)
+
+### Structure
 
 ```
-Main
- ├── Catalog Module
- │     ├── CatalogService (public)
- │     ├── CatalogFactory (public)
- │     ├── Product (package-private)
- │     ├── ProductRepository (package-private)
- │     └── CatalogServiceImpl (package-private)
- │
- └── Orders Module
-       ├── OrderController (public)
-       ├── OrdersFactory (public)
-       ├── OrderService (package-private)
-       └── OrderRepository (package-private)
+Controller → Service → Repository
 ```
 
-Each module hides its implementation details and only exposes what is necessary.
+### Dependency Flow
+
+```
+OrderController
+      ↓
+OrderService
+      ↓
+ProductRepository
+```
+
+### Problem
+
+The **OrderService directly accessed ProductRepository**, which belongs to product domain logic.
+
+This created:
+
+- Tight coupling between order and product logic
+    
+- Shared internal data access
+    
+- Difficult refactoring
+    
+- Poor modularity
+    
+
+Example from Lab 01:
+
+```java
+Product product = productRepository.findById(productId);
+```
+
+Here, the Orders logic knows:
+
+- Product structure
+    
+- Product storage
+    
+- Stock logic
+    
+
+This violates **Separation of Business Domains**.
 
 ---
 
-# Information Hiding
+# Lab 02 – Modular Monolith
 
-Information hiding was achieved using Java’s **default (package-private)** access modifier.
+In Lab 02, the system was divided into two independent modules:
 
-Only the following classes are public:
+```
+catalog module
+orders module
+```
+
+Modules communicate **only through interfaces**.
+
+### New Dependency Flow
+
+```
+OrderController
+      ↓
+OrderService
+      ↓
+CatalogService (Interface)
+      ↓
+Catalog Module Internal Classes
+```
+
+The Orders module **no longer accesses ProductRepository**.
+
+Instead, it calls:
+
+```java
+catalogService.checkAndReduceStock(productId, quantity);
+```
+
+This hides:
+
+- Product entity
+    
+- ProductRepository
+    
+- Stock logic
+    
+- Data storage
+    
+
+---
+
+# Key Architectural Differences
+
+|Feature|Lab 01 (Layered)|Lab 02 (Modular Monolith)|
+|---|---|---|
+|Coupling|Tight|Loose|
+|Business separation|No|Yes|
+|Direct repository access|Yes|No|
+|Module boundaries|No|Yes|
+|Interface-based communication|No|Yes|
+|Information hiding|No|Yes|
+|Factory usage|No|Yes|
+|Dependency direction|Layer-based|Module-based|
+|Maintainability|Lower|Higher|
+|Scalability|Limited|Better|
+
+---
+
+# Information Hiding (Lab 02)
+
+Only public classes:
 
 ### Catalog Module
 
@@ -73,185 +150,118 @@ Only the following classes are public:
 - `OrdersFactory`
     
 
-All repositories, entities, and implementations remain hidden inside their packages.
+Hidden classes (package-private):
 
-This ensures:
-
-- Loose coupling
+- `Product`
     
-- Encapsulation
+- `ProductRepository`
     
-- Clear module boundaries
+- `CatalogServiceImpl`
     
-
----
-
-# Module Communication
-
-Modules communicate only through **interfaces**.
-
-The **Orders Module** does NOT know:
-
-- What a Product is
-    
-- How stock is stored
-    
-- How repository works
-    
-
-It only calls:
-
-```
-catalogService.checkAndReduceStock(productId, quantity);
-```
-
-This enforces dependency inversion and loose coupling.
-
----
-
-# Implementation Details
-
-## TASK 1 — Catalog Module Logic
-
-- Implemented `ProductRepository`
-    
-- Added `findById()` method
-    
-- Added `save()` method
-    
-- Injected repository into `CatalogServiceImpl`
-    
-- Implemented `checkAndReduceStock()`
-    
-
-Logic:
-
-- Find product
-    
-- Check stock availability
-    
-- Reduce stock
-    
-- Save updated product
-    
-- Throw exception if insufficient stock
-    
-
----
-
-## TASK 2 — Catalog Factory
-
-`CatalogFactory` wires internal dependencies.
-
-Steps:
-
-1. Create `ProductRepository`
-    
-2. Create `CatalogServiceImpl`
-    
-3. Return `CatalogService`
-    
-
-This hides internal wiring from external modules.
-
----
-
-## TASK 3 — Orders Module
-
-`OrderService` receives `CatalogService` via constructor injection.
-
-`placeOrder()` logic:
-
-- Call `catalogService.checkAndReduceStock()`
-    
-- Create order
-    
-- Save order
-    
-
-The service never accesses product data directly.
-
-`OrderController`:
-
-- Calls service
-    
-- Wraps logic inside `try-catch`
-    
-- Handles success and error messages
-    
-
----
-
-## TASK 4 — Orders Factory
-
-`OrdersFactory` wires:
-
 - `OrderRepository`
     
 - `OrderService`
     
-- `OrderController`
-    
 
-It receives `CatalogService` as external dependency.
-
-This allows cross-module communication while maintaining boundaries.
+This prevents cross-module access.
 
 ---
 
-## TASK 5 — Main Bootstrapping
+# Dependency Comparison
 
-Main class initializes modules:
-
-1. Create Catalog module using `CatalogFactory`
-    
-2. Pass CatalogService to OrdersFactory
-    
-3. Create Orders module
-    
-4. Call controller to test order placement
-    
-
-Example flow:
+### Lab 01 (Tight Coupling)
 
 ```
-CatalogService catalog = CatalogFactory.create();
-OrderController controller = OrdersFactory.create(catalog);
-controller.placeOrder(1L, 2);
+OrderService → ProductRepository
 ```
+
+Orders module knows product details.
 
 ---
 
-# Achievements
+### Lab 02 (Loose Coupling)
 
--  Converted layered architecture to modular monolith  
--  Applied information hiding  
--  Removed tight coupling  
--  Used constructor injection  
--  Enforced interface-based communication  
--  Implemented factory pattern for dependency wiring
+```
+OrderService → CatalogService (interface only)
+```
+
+Orders module knows **only behavior**, not implementation.
+
+---
+
+# Factory Pattern Usage (Lab 02)
+
+Factories were introduced to wire dependencies internally.
+
+### CatalogFactory
+
+Creates:
+
+```
+ProductRepository
+CatalogServiceImpl
+```
+
+Returns:
+
+```
+CatalogService
+```
+
+### OrdersFactory
+
+Creates:
+
+```
+OrderRepository
+OrderService
+OrderController
+```
+
+Receives:
+
+```
+CatalogService (external dependency)
+```
+
+This keeps module internals hidden.
 
 ---
 
 # Advantages of Modular Monolith
 
-- Easier to maintain
+- Removes tight coupling
     
-- Clear module boundaries
+- Clear module ownership
     
-- No shared database access
+- Better maintainability
     
-- Loose coupling
+- Easier testing
     
-- Easier transition to microservices later
+- Easier refactoring
     
-- Better testability
+- Prepares system for microservices migration
+    
+- Enforces domain separation
     
 
 ---
 
 # Conclusion
 
-This lab demonstrated how a **Modular Monolith** improves architecture quality by enforcing boundaries and reducing coupling. Using interfaces, factories, and information hiding, each module became independent while still working inside a single application.
+Lab 01 demonstrated a basic layered architecture, but it resulted in **tight coupling** because the Orders logic directly accessed product data.
 
-This architecture keeps the simplicity of a monolith while providing the modularity benefits typically seen in microservices.
+Lab 02 improved the design by introducing a **Modular Monolith**, where:
+
+- Modules are independent
+    
+- Communication happens via interfaces
+    
+- Internal implementations are hidden
+    
+- Dependencies are wired using factories
+    
+
+This resulted in **loose coupling**, **better separation of concerns**, and a more maintainable architecture.
+
+The comparison clearly shows that Modular Monolith architecture provides stronger boundaries and better scalability than the basic layered architecture used in Lab 01.
